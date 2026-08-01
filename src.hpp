@@ -4,6 +4,8 @@
 
 using namespace std;
 
+int query(int x, int y, int z);
+
 namespace {
 
 struct TripleKey {
