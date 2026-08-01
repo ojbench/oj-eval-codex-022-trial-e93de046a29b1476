@@ -17,6 +17,68 @@ struct TripleKey {
     }
 };
 
+__int128 abs128(__int128 x) { return x < 0 ? -x : x; }
+
+__int128 gcd128(__int128 a, __int128 b) {
+    a = abs128(a);
+    b = abs128(b);
+    while (b != 0) {
+        __int128 t = a % b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+struct Fraction {
+    __int128 num = 0;
+    __int128 den = 1;
+
+    Fraction() = default;
+    Fraction(__int128 n) : num(n), den(1) {}
+    Fraction(__int128 n, __int128 d) : num(n), den(d) { normalize(); }
+
+    void normalize() {
+        if (den < 0) {
+            den = -den;
+            num = -num;
+        }
+        if (num == 0) {
+            den = 1;
+            return;
+        }
+        __int128 g = gcd128(num, den);
+        num /= g;
+        den /= g;
+    }
+
+    bool isZero() const { return num == 0; }
+};
+
+Fraction operator+(const Fraction &a, const Fraction &b) {
+    Fraction r(a.num * b.den + b.num * a.den, a.den * b.den);
+    r.normalize();
+    return r;
+}
+
+Fraction operator-(const Fraction &a, const Fraction &b) {
+    Fraction r(a.num * b.den - b.num * a.den, a.den * b.den);
+    r.normalize();
+    return r;
+}
+
+Fraction operator*(const Fraction &a, const Fraction &b) {
+    Fraction r(a.num * b.num, a.den * b.den);
+    r.normalize();
+    return r;
+}
+
+Fraction operator/(const Fraction &a, const Fraction &b) {
+    Fraction r(a.num * b.den, a.den * b.num);
+    r.normalize();
+    return r;
+}
+
 long long ask(int x, int y, int z) {
     return query(x, y, z);
 }
@@ -29,12 +91,10 @@ long long evalTriple(const vector<long long> &values, int i, int j, int k) {
 
 bool solveFive(const array<long long, 10> &res, array<long long, 5> &sortedValues, array<int, 5> &perm) {
     vector<int> p = {0, 1, 2, 3, 4};
-    array<array<int, 5>, 10> coeffs{};
-    array<int, 10> rhs{};
     const array<array<int, 3>, 10> triples = {{{0,1,2},{0,1,3},{0,1,4},{0,2,3},{0,2,4},{0,3,4},{1,2,3},{1,2,4},{1,3,4},{2,3,4}}};
 
     do {
-        array<array<long double, 6>, 10> mat{};
+        array<array<Fraction, 6>, 10> mat{};
         for (int row = 0; row < 10; ++row) {
             int u = triples[row][0], v = triples[row][1], w = triples[row][2];
             int pu = -1, pv = -1, pw = -1;
@@ -45,47 +105,48 @@ bool solveFive(const array<long long, 10> &res, array<long long, 5> &sortedValue
             }
             int lo = min({pu, pv, pw});
             int hi = max({pu, pv, pw});
-            mat[row][lo] = 1;
-            mat[row][hi] = 1;
-            mat[row][5] = (long double)res[row];
+            mat[row][lo] = Fraction(1);
+            mat[row][hi] = Fraction(1);
+            mat[row][5] = Fraction(res[row]);
         }
 
         int row = 0;
         vector<int> where(5, -1);
+        bool ok = true;
         for (int col = 0; col < 5 && row < 10; ++col) {
-            int sel = row;
+            int sel = -1;
             for (int i = row; i < 10; ++i) {
-                if (fabsl(mat[i][col]) > fabsl(mat[sel][col])) sel = i;
+                if (!mat[i][col].isZero()) {
+                    sel = i;
+                    break;
+                }
             }
-            if (fabsl(mat[sel][col]) < 1e-12) continue;
+            if (sel == -1) continue;
             swap(mat[sel], mat[row]);
             where[col] = row;
-            long double div = mat[row][col];
-            for (int j = col; j < 6; ++j) mat[row][j] /= div;
+            Fraction pivot = mat[row][col];
+            for (int j = col; j < 6; ++j) mat[row][j] = mat[row][j] / pivot;
             for (int i = 0; i < 10; ++i) {
-                if (i == row) continue;
-                long double factor = mat[i][col];
-                if (fabsl(factor) < 1e-12) continue;
-                for (int j = col; j < 6; ++j) mat[i][j] -= factor * mat[row][j];
+                if (i == row || mat[i][col].isZero()) continue;
+                Fraction factor = mat[i][col];
+                for (int j = col; j < 6; ++j) mat[i][j] = mat[i][j] - factor * mat[row][j];
             }
             ++row;
         }
         if (row < 5) continue;
 
         array<long long, 5> values{};
-        bool ok = true;
         for (int col = 0; col < 5; ++col) {
             if (where[col] == -1) {
                 ok = false;
                 break;
             }
-            long double val = mat[where[col]][5];
-            long long rounded = llround(val);
-            if (fabsl(val - (long double)rounded) > 1e-6) {
+            const Fraction &val = mat[where[col]][5];
+            if (val.den != 1) {
                 ok = false;
                 break;
             }
-            values[col] = rounded;
+            values[col] = (long long)val.num;
         }
         if (!ok) continue;
         for (int i = 1; i < 5; ++i) {
