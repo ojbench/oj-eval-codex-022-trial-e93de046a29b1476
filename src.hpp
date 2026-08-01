@@ -90,85 +90,73 @@ long long evalTriple(const vector<long long> &values, int i, int j, int k) {
 }
 
 bool solveFive(const array<long long, 10> &res, array<long long, 5> &sortedValues, array<int, 5> &perm) {
-    vector<int> p = {0, 1, 2, 3, 4};
     const array<array<int, 3>, 10> triples = {{{0,1,2},{0,1,3},{0,1,4},{0,2,3},{0,2,4},{0,3,4},{1,2,3},{1,2,4},{1,3,4},{2,3,4}}};
 
+    array<int, 5> order = {0, 1, 2, 3, 4};
     do {
-        array<array<Fraction, 6>, 10> mat{};
-        for (int row = 0; row < 10; ++row) {
-            int u = triples[row][0], v = triples[row][1], w = triples[row][2];
-            int pu = -1, pv = -1, pw = -1;
-            for (int t = 0; t < 5; ++t) {
-                if (p[t] == u) pu = t;
-                if (p[t] == v) pv = t;
-                if (p[t] == w) pw = t;
-            }
-            int lo = min({pu, pv, pw});
-            int hi = max({pu, pv, pw});
-            mat[row][lo] = Fraction(1);
-            mat[row][hi] = Fraction(1);
-            mat[row][5] = Fraction(res[row]);
+        array<int, 5> rankOfPos{};
+        for (int rank = 0; rank < 5; ++rank) rankOfPos[order[rank]] = rank;
+
+        vector<vector<Fraction>> mat(10, vector<Fraction>(6));
+        for (int t = 0; t < 10; ++t) {
+            int a = triples[t][0], b = triples[t][1], c = triples[t][2];
+            array<int, 3> ranks = {rankOfPos[a], rankOfPos[b], rankOfPos[c]};
+            sort(ranks.begin(), ranks.end());
+            mat[t][ranks[0]] = Fraction(1);
+            mat[t][ranks[2]] = Fraction(1);
+            mat[t][5] = Fraction(res[t]);
         }
 
+        vector<int> pivotRow(5, -1);
         int row = 0;
-        vector<int> where(5, -1);
-        bool ok = true;
         for (int col = 0; col < 5 && row < 10; ++col) {
-            int sel = -1;
+            int pivot = -1;
             for (int i = row; i < 10; ++i) {
                 if (!mat[i][col].isZero()) {
-                    sel = i;
+                    pivot = i;
                     break;
                 }
             }
-            if (sel == -1) continue;
-            swap(mat[sel], mat[row]);
-            where[col] = row;
-            Fraction pivot = mat[row][col];
-            for (int j = col; j < 6; ++j) mat[row][j] = mat[row][j] / pivot;
+            if (pivot == -1) continue;
+            swap(mat[pivot], mat[row]);
+            Fraction inv = Fraction(1) / mat[row][col];
+            for (int j = col; j <= 5; ++j) mat[row][j] = mat[row][j] * inv;
             for (int i = 0; i < 10; ++i) {
                 if (i == row || mat[i][col].isZero()) continue;
                 Fraction factor = mat[i][col];
-                for (int j = col; j < 6; ++j) mat[i][j] = mat[i][j] - factor * mat[row][j];
+                for (int j = col; j <= 5; ++j) mat[i][j] = mat[i][j] - factor * mat[row][j];
             }
+            pivotRow[col] = row;
             ++row;
         }
-        if (row < 5) continue;
 
+        if (row != 5) continue;
+
+        bool ok = true;
         array<long long, 5> values{};
         for (int col = 0; col < 5; ++col) {
-            if (where[col] == -1) {
+            const Fraction &value = mat[pivotRow[col]][5];
+            if (value.den != 1) {
                 ok = false;
                 break;
             }
-            const Fraction &val = mat[where[col]][5];
-            if (val.den != 1) {
-                ok = false;
-                break;
-            }
-            values[col] = (long long)val.num;
+            values[col] = (long long)value.num;
         }
-        if (!ok) continue;
-        for (int i = 1; i < 5; ++i) {
-            if (!(values[i - 1] < values[i])) {
-                ok = false;
-                break;
-            }
+        for (int i = 1; i < 5 && ok; ++i) {
+            if (!(values[i - 1] < values[i])) ok = false;
         }
-        if (!ok) continue;
-
         array<long long, 5> assigned{};
-        for (int i = 0; i < 5; ++i) assigned[p[i]] = values[i];
-        for (int rowi = 0; rowi < 10 && ok; ++rowi) {
-            int a = triples[rowi][0], b = triples[rowi][1], c = triples[rowi][2];
-            if (evalTriple(vector<long long>(assigned.begin(), assigned.end()), a, b, c) != res[rowi]) ok = false;
+        for (int rank = 0; rank < 5; ++rank) assigned[order[rank]] = values[rank];
+        for (int t = 0; t < 10 && ok; ++t) {
+            int a = triples[t][0], b = triples[t][1], c = triples[t][2];
+            if (evalTriple(vector<long long>(assigned.begin(), assigned.end()), a, b, c) != res[t]) ok = false;
         }
         if (ok) {
             sortedValues = values;
-            perm = {p[0], p[1], p[2], p[3], p[4]};
+            for (int i = 0; i < 5; ++i) perm[i] = order[i];
             return true;
         }
-    } while (next_permutation(p.begin(), p.end()));
+    } while (next_permutation(order.begin(), order.end()));
     return false;
 }
 
